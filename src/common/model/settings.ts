@@ -1,5 +1,7 @@
 import { Type } from "@sinclair/typebox";
 
+import { Store } from "$/api/common-store";
+
 export const settingsSchema = Type.Object({
     fullscreen: Type.Boolean({ default: true }),
     displayIndex: Type.Number({ default: 0 }),
@@ -13,3 +15,5 @@ export const settingsSchema = Type.Object({
     battlesHideLocked: Type.Boolean({ default: false }),
     battlesHideEmpty: Type.Boolean({ default: true }),
 });
+
+export type SettingsStore = Store<typeof settingsSchema>;

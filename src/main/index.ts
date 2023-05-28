@@ -6,8 +6,8 @@ import envPaths from "env-paths";
 import os from "os";
 import path from "path";
 
-import { StoreAPI } from "@/api/store";
-import { MainWindow } from "@/main-window";
+import { newStore } from "@/api/store";
+import * as MainWindow from "@/main-window";
 import type { Info } from "$/model/info";
 import { settingsSchema } from "$/model/settings";
 
@@ -18,135 +18,126 @@ import { settingsSchema } from "$/model/settings";
 // console.log(client.localplayer.getName());
 // steamworks.electronEnableSteamOverlay();
 
-export class Application {
-    protected mainWindow?: MainWindow;
-    protected settings?: StoreAPI<typeof settingsSchema>;
-    protected initialised = false;
+const NODE_ENV = process.env.NODE_ENV;
 
-    constructor() {
-        app.setName("Beyond All Reason");
-
-        process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
-
-        protocol.registerSchemesAsPrivileged([
-            {
-                scheme: "bar",
-                privileges: {
-                    secure: true,
-                    standard: true,
-                    stream: true,
-                },
-            },
-        ]);
-
-        app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling,MediaSessionService");
-
-        if (process.env.NODE_ENV !== "production") {
-            if (process.platform === "win32") {
-                process.on("message", (data) => {
-                    if (data === "graceful-exit") {
-                        app.quit();
-                    }
-                });
-            } else {
-                process.on("SIGTERM", () => {
-                    app.quit();
-                });
-            }
-        }
-
-        app.on("ready", () => this.onReady());
-        app.on("window-all-closed", () => app.quit());
-        app.on("browser-window-focus", () => this.mainWindow?.window.flashFrame(false));
-    }
-
-    protected async onReady() {
-        if (process.env.NODE_ENV === "development") {
-            try {
-                // await installExtension(VUEJS_DEVTOOLS);
-            } catch (err) {
-                console.error("Vue Devtools failed to install:", err?.toString());
-            }
-        } else if (app.isPackaged && process.env.NODE_ENV !== "development") {
-            autoUpdater.checkForUpdatesAndNotify();
-        }
-
-        if (!this.initialised) {
-            this.initialised = true;
-            await this.init();
-        }
-    }
-
-    protected async init() {
-        const info = this.getInfo();
-        const settingsFilePath = path.join(info.configPath, "settings.json");
-        this.settings = await new StoreAPI(settingsFilePath, settingsSchema).init();
-
-        this.mainWindow = new MainWindow(this.settings);
-
-        this.mainWindow.window.on("restore", () => this.mainWindow?.window.flashFrame(false));
-
-        this.setupHandlers();
-    }
-
-    protected setupHandlers() {
-        ipcMain.handle("getInfo", async () => {
-            return this.getInfo();
-        });
-
-        ipcMain.handle("flashFrame", (event, flag: boolean) => {
-            this.mainWindow?.window.flashFrame(flag);
-        });
-
-        ipcMain.handle("encryptString", async (event, str: string) => {
-            if (safeStorage.isEncryptionAvailable()) {
-                return safeStorage.encryptString(str);
-            }
-            console.warn(`encryption not available, storing as plaintext`);
-            return str;
-        });
-
-        ipcMain.handle("decryptString", async (event, buffer: Buffer) => {
-            if (safeStorage.isEncryptionAvailable()) {
-                return safeStorage.decryptString(buffer);
-            }
-            console.warn(`encryption not available, returning buffer`);
-            return buffer.toString();
-        });
-    }
-
-    protected getInfo() {
-        const resourcesPath = path.join(app.getAppPath(), "resources").split("resources")[0] + "resources";
-        const paths = envPaths(app.getName(), { suffix: "" });
-
-        const displayIds = screen.getAllDisplays().map((display) => display.id);
-        let currentDisplayId = 0;
-        if (this.mainWindow) {
-            currentDisplayId = screen.getDisplayNearestPoint(this.mainWindow.window.getBounds()).id;
-        }
-
-        const networkInterfaces = os.networkInterfaces();
-        const defaultNetworkInterface = networkInterfaces["Ethernet"]?.[0] ?? Object.values(networkInterfaces)[0]?.[0];
-
-        const info: Info = {
-            resourcesPath,
-            contentPath: paths.data,
-            configPath: paths.config,
-            lobby: {
-                name: "BAR Lobby",
-                version: app.getVersion(),
-                hash: defaultNetworkInterface?.mac ?? "123",
-            },
-            hardware: {
-                numOfDisplays: displayIds.length,
-                currentDisplayIndex: displayIds.indexOf(currentDisplayId),
-            },
-        };
-
-        return info;
-    }
-}
+let initialised = false;
 
 unhandled();
 
-new Application();
+app.setName("Beyond All Reason");
+
+process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
+
+function getInfo() {
+    const resourcesPath = path.join(app.getAppPath(), "resources").split("resources")[0] + "resources";
+    const paths = envPaths(app.getName(), { suffix: "" });
+
+    const displayIds = screen.getAllDisplays().map((display) => display.id);
+    let currentDisplayId = 0;
+    if (MainWindow.window) {
+        currentDisplayId = screen.getDisplayNearestPoint(MainWindow.window.getBounds()).id;
+    }
+
+    const networkInterfaces = os.networkInterfaces();
+    const defaultNetworkInterface = networkInterfaces["Ethernet"]?.[0] ?? Object.values(networkInterfaces)[0]?.[0];
+
+    const info: Info = {
+        resourcesPath,
+        contentPath: paths.data,
+        configPath: paths.config,
+        lobby: {
+            name: "BAR Lobby",
+            version: app.getVersion(),
+            hash: defaultNetworkInterface?.mac ?? "123",
+        },
+        hardware: {
+            numOfDisplays: displayIds.length,
+            currentDisplayIndex: displayIds.indexOf(currentDisplayId),
+        },
+    };
+
+    return info;
+}
+
+function setupHandlers() {
+    ipcMain.handle("getInfo", async () => {
+        return getInfo();
+    });
+
+    ipcMain.handle("flashFrame", (event, flag: boolean) => {
+        MainWindow.window.flashFrame(flag);
+    });
+
+    ipcMain.handle("encryptString", async (event, str: string) => {
+        if (safeStorage.isEncryptionAvailable()) {
+            return safeStorage.encryptString(str);
+        }
+        console.warn(`encryption not available, storing as plaintext`);
+        return str;
+    });
+
+    ipcMain.handle("decryptString", async (event, buffer: Buffer) => {
+        if (safeStorage.isEncryptionAvailable()) {
+            return safeStorage.decryptString(buffer);
+        }
+        console.warn(`encryption not available, returning buffer`);
+        return buffer.toString();
+    });
+}
+
+async function onReady() {
+    if (initialised) {
+        return;
+    }
+
+    if (NODE_ENV === "development") {
+        try {
+            // await installExtension(VUEJS_DEVTOOLS);
+        } catch (err) {
+            console.error("Vue Devtools failed to install:", err?.toString());
+        }
+    } else if (app.isPackaged && NODE_ENV !== "development") {
+        autoUpdater.checkForUpdatesAndNotify();
+    }
+
+    const info = getInfo();
+    const settingsFilePath = path.join(info.configPath, "settings.json");
+    const settings = await newStore(settingsFilePath, settingsSchema);
+
+    MainWindow.init(settings);
+    MainWindow.window.on("restore", () => MainWindow.window.flashFrame(false));
+
+    setupHandlers();
+
+    initialised = true;
+}
+
+protocol.registerSchemesAsPrivileged([
+    {
+        scheme: "bar",
+        privileges: {
+            secure: true,
+            standard: true,
+            stream: true,
+        },
+    },
+]);
+
+app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling,MediaSessionService");
+app.on("ready", onReady);
+app.on("window-all-closed", () => app.quit());
+app.on("browser-window-focus", () => MainWindow.window.flashFrame(false));
+
+if (NODE_ENV !== "production") {
+    if (process.platform === "win32") {
+        process.on("message", (data) => {
+            if (data === "graceful-exit") {
+                app.quit();
+            }
+        });
+    } else {
+        process.on("SIGTERM", () => {
+            app.quit();
+        });
+    }
+}

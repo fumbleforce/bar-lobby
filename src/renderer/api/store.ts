@@ -3,18 +3,17 @@ import { ipcRenderer } from "electron";
 import path from "path";
 import { toRaw, watch } from "vue";
 
-import { AsbtractStoreAPI } from "$/api/abstract-store";
+import { newCommonStore } from "$/api/common-store";
+export type { Store } from "$/api/common-store";
 
-export class StoreAPI<T extends TObject> extends AsbtractStoreAPI<T> {
-    public override async init() {
-        await super.init();
+export async function newStore<T extends TObject>(filePath: string, schema: T) {
+    const name = path.parse(filePath).name;
 
-        const name = path.parse(this.filePath).name;
+    const store = await newCommonStore<T>(filePath, schema);
 
-        watch(this.model, () => {
-            ipcRenderer.send(`store-update:${name}`, toRaw(this.model));
-        });
+    watch(store.model, () => {
+        ipcRenderer.send(`store-update:${name}`, toRaw(store.model));
+    });
 
-        return this;
-    }
+    return store;
 }

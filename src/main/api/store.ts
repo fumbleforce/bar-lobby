@@ -1,20 +1,20 @@
 import { Static, TObject } from "@sinclair/typebox";
 import { ipcMain } from "electron";
-import { assign } from "jaz-ts-utils";
+import { assign as assignOnlyNonUndefined } from "jaz-ts-utils";
 import path from "path";
 
-import { AsbtractStoreAPI } from "$/api/abstract-store";
+import { newCommonStore } from "$/api/common-store";
 
-export class StoreAPI<T extends TObject> extends AsbtractStoreAPI<T> {
-    public async init() {
-        await super.init();
+export type { Store } from "$/api/common-store";
 
-        const name = path.parse(this.filePath).name;
+export async function newStore<T extends TObject>(filePath: string, schema: T) {
+    const name = path.parse(filePath).name;
 
-        ipcMain.on(`store-update:${name}`, (event, model: Static<T>) => {
-            assign(this.model, model);
-        });
+    const store = await newCommonStore<T>(filePath, schema);
 
-        return this;
-    }
+    ipcMain.on(`store-update:${name}`, (_event, model: Static<T>) => {
+        assignOnlyNonUndefined(store.model, model);
+    });
+
+    return store;
 }

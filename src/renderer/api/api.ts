@@ -13,15 +13,15 @@ import { GameAPI } from "@/api/game";
 import { NotificationsAPI } from "@/api/notifications";
 import { prompt } from "@/api/prompt";
 import { SessionAPI } from "@/api/session";
-import { StoreAPI } from "@/api/store";
+import { newStore } from "@/api/store";
 import { UtilsAPI } from "@/api/utils";
 import { serverConfig } from "@/config/server";
-import { accountSchema } from "@/model/account";
+import { accountSchema, AccountStore } from "@/model/account";
 import type { Info } from "$/model/info";
-import { settingsSchema } from "$/model/settings";
+import { settingsSchema, SettingsStore } from "$/model/settings";
 
 interface API {
-    account: StoreAPI<typeof accountSchema>;
+    account: AccountStore;
     audio: AudioAPI;
     cacheDb: CacheDbAPI;
     comms: CommsAPI;
@@ -32,7 +32,7 @@ interface API {
     prompt: typeof prompt;
     router: Router;
     session: SessionAPI;
-    settings: StoreAPI<typeof settingsSchema>;
+    settings: SettingsStore;
     utils: UtilsAPI;
 }
 
@@ -52,7 +52,7 @@ export async function apiInit() {
     api.info = await ipcRenderer.invoke("getInfo");
 
     const settingsFilePath = path.join(api.info.configPath, "settings.json");
-    api.settings = await new StoreAPI(settingsFilePath, settingsSchema).init();
+    api.settings = await newStore(settingsFilePath, settingsSchema);
 
     await fs.promises.mkdir(api.info.contentPath, {
         recursive: true,
@@ -82,7 +82,7 @@ export async function apiInit() {
     api.audio = await new AudioAPI().init();
 
     const accountFilePath = path.join(api.info.configPath, "account.json");
-    api.account = await new StoreAPI(accountFilePath, accountSchema).init();
+    api.account = await newStore(accountFilePath, accountSchema);
 
     api.game = new GameAPI();
 
